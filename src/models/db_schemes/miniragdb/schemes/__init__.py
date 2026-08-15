@@ -1,5 +1,6 @@
 from .minirag_base import SQLAlchemyBase
-from .project import Project
-from .asset import Asset
+from .domain import Domain
+from .documents import Document
+from .subdomain import SubDomain
 from .datachunk import DataChunk, RetrievedDocument
- 
+from .chunkembedding import ChunkEmbedding

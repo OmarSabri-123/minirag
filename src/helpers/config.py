@@ -27,16 +27,25 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_API_URL: Optional[str] = None
 
+    VLLM_API_URL: Optional[str] = None
+    VLLM_EMBEDDING_API_URL: Optional[str] = None
+    VLLM_API_KEY: Optional[str] = "EMPTY"
+
     GENERATION_BACKEND: str
     EMBEDDING_BACKEND: str
 
     VECTOR_DB_BACKEND: str
-    QDRANT_DB_PATH: Optional[str] = None
-    QDRANT_CACHE_PATH: Optional[str] = None
+    QDRANT_URL: Optional[str] = "http://localhost:6333"
+    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_PREFER_GRPC: bool = False
     VECTOR_DB_DISTANCE_METHOD: Optional[str] = None
     INDEX_THRESHOLD: int
 
     RERANK_CROSS_ENCODER_NAME: Optional[str] = None
+
+    CHUNK_TOKENIZER_NAME: str = "xlm-roberta-base"
+    CHUNK_SIZE_TOKENS: int = 400
+    CHUNK_OVERLAP_TOKENS: int = 80
 
     PRIMARY_LANG: Optional[str] = None
     DEFAULT_LANG: str

@@ -45,7 +45,7 @@ class NLPController(BaseController):
 
         texts = [c.chunk_text for c in chunks]
         metadata = [c.chunk_metadata for c in chunks]
-        vectors = self.embedding_client.embed_text(
+        vectors = await self.embedding_client.embed_text(
             texts, DocumentTypeEnum.DOCUMENT.value)
 
         _ = await self.vector_db_client.create_collection(
@@ -77,7 +77,7 @@ class NLPController(BaseController):
             )
         ]
 
-        answer = self.generation_client.generate_text(
+        answer = await self.generation_client.generate_text(
             prompt = user_prompt,
             chat_history = chat_history
         )
@@ -92,7 +92,7 @@ class NLPController(BaseController):
     
     async def query_embeddings(self, text: str):
         
-        vectors = self.embedding_client.embed_text(
+        vectors = await self.embedding_client.embed_text(
             text, DocumentTypeEnum.QUERY.value)
 
         if not vectors or len(vectors) == 0:
@@ -222,7 +222,7 @@ class NLPController(BaseController):
             )
         ]
 
-        answer = self.generation_client.generate_text(
+        answer = await self.generation_client.generate_text(
             prompt=full_prompt,
             chat_history=chat_history
         )

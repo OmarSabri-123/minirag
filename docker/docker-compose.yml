@@ -60,7 +60,7 @@ services:
     networks:
       - backend
     restart: always
-  
+
   prometheus:
     image: prom/prometheus:v3.7.3
     container_name: prometheus
@@ -125,7 +125,86 @@ services:
       - backend
     restart: always
 
+  qwen-vllm:
+    image: vllm/vllm-openai:latest
+    container_name: qwen-vllm
+    ports:
+      - "8002:8000"
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      # WSL2 does not expose UVA/pinned memory by default; without this the
+      # engine dies at startup with "RuntimeError: UVA is not available"
+      - VLLM_WSL2_ENABLE_PIN_MEMORY=1
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          memory: 32G
+    command: >
+      --model ${VLLM_MODEL:-JunHowie/Qwen3-1.7B-GPTQ-Int4}
+      --served-model-name qwen3-instruct
+      --host 0.0.0.0
+      --port 8000
+      --tensor-parallel-size 1
+      --max-model-len 8192
+      --gpu-memory-utilization 0.45
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+    restart: unless-stopped
+    networks:
+      - backend
   
+  bge-m3-vllm:
+    image: vllm/vllm-openai:latest
+    container_name: bge-m3-vllm
+    ports:
+      - "8003:8000"
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      # WSL2 does not expose UVA/pinned memory by default; without this the
+      # engine dies at startup with "RuntimeError: UVA is not available"
+      - VLLM_WSL2_ENABLE_PIN_MEMORY=1
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          memory: 16G
+    command: >
+      --model ${VLLM_EMBEDDING_MODEL:-BAAI/bge-m3}
+      --served-model-name bge-m3
+      --runner pooling
+      --host 0.0.0.0
+      --port 8000
+      --max-model-len 1024
+      --gpu-memory-utilization 0.30
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - backend
+
 networks:
   backend:
     driver: bridge
@@ -136,5 +215,6 @@ volumes:
   qdrant_data:
   prometheus_data:
   grafana_data:
+  huggingface_cache:
 
 

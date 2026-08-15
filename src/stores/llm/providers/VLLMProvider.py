@@ -1,19 +1,21 @@
 from ..LLMInterface import LLMInterface
-from ..LLMEnums import OpenAIEnums
+from ..LLMEnums import VLLMEnums
 from logger import logger
 from openai import AsyncOpenAI
 from typing import Union, List
 
-class OpenAIProvider(LLMInterface):
+class VLLMProvider(LLMInterface):
 
-    def __init__(self, api_key: str,
-                 api_url: str = None,
+    def __init__(self, api_url: str,
+                 api_key: str = "EMPTY",
                  default_input_max_characters: int = 1000,
                  default_output_max_tokens: int = 1000,
                  default_temperature: float = 0.1):
 
-        self.api_key = api_key
         self.api_url = api_url
+        # vLLM ignores the key unless the server was started with --api-key,
+        # but the OpenAI client refuses to build without a non-empty one
+        self.api_key = api_key if api_key and len(api_key) else "EMPTY"
 
         self.default_input_max_characters = default_input_max_characters
         self.default_output_max_tokens = default_output_max_tokens
@@ -26,10 +28,10 @@ class OpenAIProvider(LLMInterface):
 
         self.client = AsyncOpenAI(
             api_key=self.api_key,
-            base_url = self.api_url if self.api_url and len(self.api_url) else None
+            base_url=self.api_url
         )
 
-        self.enums = OpenAIEnums
+        self.enums = VLLMEnums
 
         self.logger = logger
 
@@ -43,7 +45,7 @@ class OpenAIProvider(LLMInterface):
     async def generate_text(self, prompt: str, chat_history=[], max_output_tokens: int = None, temperature: float = None):
 
         if not self.client:
-            logger.error("OpenAI client is not initialized.")
+            logger.error("vLLM client is not initialized.")
             return None
 
         if not self.generation_model_id:
@@ -54,17 +56,22 @@ class OpenAIProvider(LLMInterface):
         temperature = temperature if temperature is not None else self.default_temperature
 
         chat_history.append(
-            self.construt_prompt(prompt, role=OpenAIEnums.USER.value)
+            self.construt_prompt(prompt, role=VLLMEnums.USER.value)
         )
 
-        response = await self.client.chat.completions.create(
-            model=self.generation_model_id,
-            messages=chat_history,
-            max_tokens=max_output_tokens,
-            temperature=temperature
-        )
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.generation_model_id,
+                messages=chat_history,
+                max_tokens=max_output_tokens,
+                temperature=temperature
+            )
+        except Exception as e:
+            logger.error(f"Error while calling vLLM at {self.api_url}: {e}")
+            return None
+
         if not response or not response.choices or response.choices[0].message.content is None:
-            logger.error("No response returned from OpenAI.")
+            logger.error("No response returned from vLLM.")
             return None
 
         generated_text = response.choices[0].message.content
@@ -73,26 +80,42 @@ class OpenAIProvider(LLMInterface):
     async def embed_text(self, text: Union[str, List[str]], document_type: str = None):
 
         if not self.client:
-            logger.error("OpenAI client is not initialized.")
+            logger.error("vLLM client is not initialized.")
             return None
 
         if not self.embedding_model_id:
             logger.error("Embedding model is not set.")
             return None
-        
+
         if isinstance(text, str):
             text = [text]
 
-        response = await self.client.embeddings.create(
-            input=text,
-            model=self.embedding_model_id
-        )
+        try:
+            response = await self.client.embeddings.create(
+                input=text,
+                model=self.embedding_model_id
+            )
+        except Exception as e:
+            # a vLLM server started on a chat model does not expose /v1/embeddings
+            logger.error(f"Error while embedding with vLLM at {self.api_url}: {e}")
+            return None
 
         if not response or not response.data or response.data[0].embedding is None:
-            logger.error("No embedding returned from OpenAI.")
+            logger.error("No embedding returned from vLLM.")
             return None
-        
-        return [rec.embedding for rec in response.data]
+
+        vectors = [rec.embedding for rec in response.data]
+
+        # the vector db collection is created with a fixed size, so a mismatch
+        # here fails later at insert time with a much less obvious error
+        if self.embedding_size and len(vectors[0]) != int(self.embedding_size):
+            logger.error(
+                f"Embedding dimension mismatch: model '{self.embedding_model_id}' returned "
+                f"{len(vectors[0])} but EMBEDDING_MODEL_DIMENSION is {self.embedding_size}."
+            )
+            return None
+
+        return vectors
 
     def construt_prompt(self, prompt: str, role: str):
 

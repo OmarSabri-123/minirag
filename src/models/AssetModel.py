@@ -1,36 +1,36 @@
 from .BaseDataModel import BaseDataModel
-from .db_schemes import Asset
+from .db_schemes import Document
 from sqlalchemy.future import select
 
-class AssetModel(BaseDataModel):
+class DocumentModel(BaseDataModel):
     
     def __init__(self, db_client):
         super().__init__(db_client)
 
-    async def create_asset(self, asset: Asset):
+    async def create_document(self, document: Document):
         async with self.db_client() as session: 
             async with session.begin():
-                session.add(asset)
+                session.add(document)
             await session.commit()
-            await session.refresh(asset)
-        return asset
+            await session.refresh(document)
+        return document     
     
-    async def get_all_project_assets(self, asset_project_id: str, asset_type: str):
+    async def get_all_domain_projects(self, asset_project_id: str, asset_type: str):
         async with self.db_client() as session:
-            stmt = select(Asset).where(
-                Asset.asset_project_id == asset_project_id,
-                Asset.asset_type == asset_type
+            stmt = select(Document).where(
+                Document.asset_project_id == asset_project_id,
+                Document.asset_type == asset_type
             )
             result = await session.execute(stmt)
             records = result.scalars().all()
         return records
     
-    async def get_asset_record(self, asset_project_id: str, asset_name: str):
+    async def get_document_record(self, asset_project_id: str, asset_name: str):
         async with self.db_client() as session: 
             async with session.begin():
-                query = select(Asset).where(
-                    Asset.asset_project_id == asset_project_id,
-                    Asset.asset_name == asset_name
+                query = select(Document).where(
+                    Document.asset_project_id == asset_project_id,
+                    Document.asset_name == asset_name
                     )
                 result = await session.execute(query) 
                 result = result.scalar_one_or_none()

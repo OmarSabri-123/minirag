@@ -3,8 +3,14 @@ from enum import Enum
 class LLMEnums(Enum):
     OPENAI = "OPENAI"
     COHERE = "COHERE"
+    VLLM = "VLLM"
 
 class OpenAIEnums(Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+
+class VLLMEnums(Enum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"

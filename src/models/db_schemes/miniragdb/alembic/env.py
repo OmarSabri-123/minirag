@@ -1,8 +1,8 @@
 from logging.config import fileConfig
-from schemes import SQLAlchemyBase
+
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
+from schemes import SQLAlchemyBase
 from alembic import context
 
 # this is the Alembic Config object, which provides

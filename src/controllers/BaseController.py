@@ -1,6 +1,6 @@
 import string
 import random
-from helper.config import get_settings, Settings
+from helpers.config import get_settings, Settings
 import os
 
 class BaseController:

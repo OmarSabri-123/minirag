@@ -1,35 +1,111 @@
 from .minirag_base import SQLAlchemyBase
-from sqlalchemy import Column, Integer, DateTime, func, String, ForeignKey, Index
+from pydantic import BaseModel
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
+    func,
+)
+
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel
+
 import uuid
+
 
 class DataChunk(SQLAlchemyBase):
 
-    __tablename__ = "chunks"
+    __tablename__ = "data_chunks"
 
-    chunk_id = Column(Integer, primary_key=True, autoincrement=True)
-    chunk_uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
+    chunk_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
 
-    chunk_text = Column(String, nullable=False)
-    chunk_metadata = Column(JSONB, nullable=True)
-    chunk_order = Column(Integer, nullable=False)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "documents.document_id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
 
-    chunk_project_id = Column(Integer, ForeignKey("projects.project_id"), nullable=False)
-    chunk_asset_id = Column(Integer, ForeignKey("assets.asset_id"), nullable=False)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    chunk_index = Column(
+        Integer,
+        nullable=False
+    )
 
+    title = Column(
+        String(500),
+        nullable=True
+    )
 
-    project = relationship("Project", back_populates="chunks")
-    asset = relationship("Asset", back_populates="chunks")
+    content = Column(
+        Text,
+        nullable=False
+    )
+
+    token_count = Column(
+        Integer,
+        nullable=True
+    )
+
+    language = Column(
+        String(20),
+        default="ar-en",
+        nullable=False
+    )
+
+    chunk_metadata = Column(
+        "metadata",
+        JSONB,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        onupdate=func.now(),
+        nullable=True
+    )
+
+    document = relationship(
+        "Document",
+        back_populates="chunks"
+    )
+
+    embeddings = relationship(
+        "ChunkEmbedding",
+        back_populates="chunk"
+    )
 
     __table_args__ = (
-        Index('ix_chunk_project_id', chunk_project_id),
-        Index('ix_chunk_asset_id', chunk_asset_id),
+
+        UniqueConstraint(
+            "document_id",
+            "chunk_index",
+            name="uq_document_chunk_index"
+        ),
+
+        Index(
+            "ix_data_chunks_document_id",
+            "document_id"
+        ),
     )
+    
 
 class RetrievedDocument(BaseModel):
     text: str

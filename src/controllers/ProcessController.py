@@ -1,22 +1,27 @@
 import os
-import sys
 os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-sys.stdout.reconfigure(encoding='utf-8')
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.types.doc.document import ImageRefMode
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import TextLoader, Docx2txtLoader
 from langchain_text_splitters.markdown import MarkdownHeaderTextSplitter
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import pandas as pd
+from transformers import AutoTokenizer
+from functools import lru_cache
 from models import ResponseEnumeration, ProcessingEnums
 from .BaseController import BaseController
 from .ProjectController import ProjectController
 from logger import logger
+
+@lru_cache(maxsize=2)
+def get_chunk_tokenizer(tokenizer_name: str):
+    # cached so the tokenizer is loaded once, not on every request
+    logger.info(f"Loading chunking tokenizer: {tokenizer_name}")
+    return AutoTokenizer.from_pretrained(tokenizer_name)
 
 class ProcessController(BaseController):
     def __init__(self,project_id: str):
@@ -27,7 +32,22 @@ class ProcessController(BaseController):
             ("##", "Header 2"),
             ("###", "Header 3"),
         ]
-    
+        # ordered from the strongest boundary to the weakest, so the splitter
+        # only falls back to a weaker one when a chunk is still too large
+        self.text_separators = [
+            "\n\n", "\n",                       # paragraph / line
+            ".", "!", "?",                      # latin / cyrillic sentence end
+            "。", "！", "？",       # 。！？ cjk sentence end
+            "۔", "؟",                 # ۔ ؟ arabic / urdu sentence end
+            "।", "॥",                 # । ॥ devanagari danda
+            "።",                           # ። ethiopic sentence end
+            ";", ":", ",",                      # latin clause
+            "؛", "،",                 # ؛ ، arabic clause
+            "、", "，",                 # 、，cjk clause
+            " ", "　", "​",            # space, ideographic space, zero-width space (thai/khmer/burmese)
+            ""                                  # last resort: split anywhere
+        ]
+
     def get_process_path(self):
         process_path = ProjectController().get_project_path(self.project_id)
         return process_path
@@ -46,8 +66,8 @@ class ProcessController(BaseController):
     def convert_process_file_into_markdown(self, file_name: str):
 
         pipline_options = PdfPipelineOptions()
-        # pipline_options.do_formula_enrichment = True
-        # pipline_options.do_ocr = True
+        pipline_options.do_formula_enrichment = True
+        pipline_options.do_ocr = True
         pipline_options.generate_picture_images = True
         pipline_options.images_scale =3
         
@@ -77,9 +97,12 @@ class ProcessController(BaseController):
     
     def recursive_chunk_text(self, documents):
 
-        splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-            chunk_size=1000,
-            chunk_overlap=200
+        splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            get_chunk_tokenizer(self.app_settings.CHUNK_TOKENIZER_NAME),
+            chunk_size=self.app_settings.CHUNK_SIZE_TOKENS,
+            chunk_overlap=self.app_settings.CHUNK_OVERLAP_TOKENS,
+            separators=self.text_separators,
+            keep_separator="end"
         )
         chunks = splitter.split_documents(documents)
         return chunks
@@ -92,6 +115,14 @@ class ProcessController(BaseController):
         documents = loader.load()
         return documents
     
+    def load_docx_file(self, file_name:str):
+
+        file_path = os.path.join(self.get_process_path(), file_name)
+
+        loader = Docx2txtLoader(file_path)
+        documents = loader.load()
+        return documents
+
     def parse_csv_file(self, file_name:str):
         # Placeholder for CSV parsing logic
         # You can use pandas or csv module to read and process CSV files
@@ -133,6 +164,11 @@ class ProcessController(BaseController):
                 documents = self.load_markdown_or_txt_file(file_name)
                 chunks = self.recursive_chunk_text(documents)
                 logger.info(f"Initial chunks from TXT file: {len(chunks)}")
+
+            elif ext == ProcessingEnums.DOCX.value:
+                documents = self.load_docx_file(file_name)
+                chunks = self.recursive_chunk_text(documents)
+                logger.info(f"Initial chunks from DOCX file: {len(chunks)}")
 
             elif ext == ProcessingEnums.CSV.value:
                 chunks = self.parse_csv_file(file_name)

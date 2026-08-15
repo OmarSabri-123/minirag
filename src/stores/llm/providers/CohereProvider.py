@@ -24,7 +24,7 @@ class CohereProvider(LLMInterface):
 
         self.enums = CoHereEnums
 
-        self.client = cohere.ClientV2(api_key=self.api_key)
+        self.client = cohere.AsyncClientV2(api_key=self.api_key)
 
         self.logger = logger
     
@@ -35,7 +35,7 @@ class CohereProvider(LLMInterface):
         self.embedding_model_id = model_id
         self.embedding_size = embedding_dimension
 
-    def generate_text(self, prompt: str, chat_history=[], max_output_tokens: int = None, temperature: float = None):
+    async def generate_text(self, prompt: str, chat_history=[], max_output_tokens: int = None, temperature: float = None):
         if not self.client:
             logger.error("Cohere client is not initialized.")
             return None
@@ -51,7 +51,7 @@ class CohereProvider(LLMInterface):
             self.construt_prompt(prompt, role=CoHereEnums.USER.value)
         )
 
-        response = self.client.chat(
+        response = await self.client.chat(
             model=self.generation_model_id,
             messages=chat_history,
             max_tokens=max_output_tokens,
@@ -64,7 +64,7 @@ class CohereProvider(LLMInterface):
         
         return response.message.content[0].text
     
-    def embed_text(self, text: Union[str, List[str]], document_type: str = None):
+    async def embed_text(self, text: Union[str, List[str]], document_type: str = None):
 
         if not self.client:
             logger.error("Cohere client is not initialized.")
@@ -81,7 +81,7 @@ class CohereProvider(LLMInterface):
         if isinstance(text, str):
             text = [text]
         
-        res = self.client.embed(
+        res = await self.client.embed(
             model = self.embedding_model_id,
             texts = text,
             input_type = input_type,

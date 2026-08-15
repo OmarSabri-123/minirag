@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.base import base_router
 from routes.upload import upload_router
 from routes.nlp import nlp_router
-from helper import get_settings, Settings
+from helpers import get_settings, Settings
 from stores.llm.LLMProviderFactory import LLMProviderFactory
 from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
 from stores.llm.templates.template_parser import TemplateParser
@@ -49,7 +49,7 @@ async def startup_span():
     app.generation_client.set_generation_model(settings.GENERATION_MODEL_ID)
 
     app.embedding_client = llm_provider_factory.create(
-        settings.EMBEDDING_BACKEND)
+        settings.EMBEDDING_BACKEND, for_embedding=True)
     app.embedding_client.set_embedding_model(
         settings.EMBEDDING_MODEL_ID, settings.EMBEDDING_MODEL_DIMENSION)
 

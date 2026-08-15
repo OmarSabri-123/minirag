@@ -1,11 +1,11 @@
 import os
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
-from helper.config import get_settings, Settings
+from helpers.config import get_settings, Settings
 from logger import setup_logger
 from models import ResponseEnumeration, AssetTypeEnum
 from models.ChunkModel import ChunkModel
-from models.ProjectModel import ProjectModel
+from models.DomainModel import ProjectModel
 from models.AssetModel import AssetModel
 from models.db_schemes import Asset, DataChunk
 from controllers import UploadController, ProcessController, NLPController

@@ -5,3 +5,4 @@ class ProcessingEnums(Enum):
     MARKDOWN = ".md"
     TXT = ".txt"
     CSV = ".csv"
+    DOCX = ".docx"

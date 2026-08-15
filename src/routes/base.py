@@ -1,9 +1,6 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from fastapi import FastAPI,APIRouter,Depends
 from fastapi.responses import JSONResponse
-from helper.config import get_settings, Settings
+from helpers.config import get_settings, Settings
 from logger import logger
 
 base_router = APIRouter(

@@ -1,6 +1,6 @@
 APP_NAME = "Multi-Model RAG API"
 
-FILE_ALLOWED_EXTENSIONS = ["text/plain", "application/pdf", "text/markdown", "text/x-markdown","text/csv"]
+FILE_ALLOWED_EXTENSIONS = ["text/plain", "application/pdf", "text/markdown", "text/x-markdown","text/csv", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
                         #    ,"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         #    ,"application/msword"
                         #    ,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -37,24 +37,36 @@ COHERE_API_KEY = ""
 OPENAI_API_KEY = ""
 OPENAI_API_URL =
 
-GENERATION_BACKEND = "OPENAI"  # openai, cohere, anthropic, gemini, groq
-EMBEDDING_BACKEND = "COHERE"
+VLLM_API_URL = "http://qwen-vllm:8000/v1"
+VLLM_EMBEDDING_API_URL = "http://bge-m3-vllm:8000/v1"
+VLLM_API_KEY = "EMPTY"
+
+GENERATION_BACKEND = "VLLM"  # OPENAI, COHERE, VLLM
+EMBEDDING_BACKEND = "VLLM"
 
 DAFAULT_INPUT_MAX_CHARACTERS = 1024
 DAFAULT_OUTPUT_MAX_TOKENS = 200
 DAFAULT_TEMPERATURE = 0.1
 
-GENERATION_MODEL_ID = "gpt-4o-mini-2024-07-18"
-EMBEDDING_MODEL_ID = "embed-multilingual-light-v3.0"
-EMBEDDING_MODEL_DIMENSION = 384
+# must match --served-model-name in docker-compose.yml, not the HF repo id
+GENERATION_MODEL_ID = "qwen3-instruct"
+EMBEDDING_MODEL_ID = "bge-m3"
+EMBEDDING_MODEL_DIMENSION = 1024
 
 
 ####################### Vector DB Config ##########
 VECTOR_DB_BACKEND = "pgvector"
-QDRANT_DB_PATH = "qdrant_db"
+QDRANT_URL = "http://qdrant:6333"
+QDRANT_API_KEY = ""
+QDRANT_PREFER_GRPC = False
 VECTOR_DB_DISTANCE_METHOD = "cosine"
 
 INDEX_THRESHOLD = 200
+
+####################### Chunking #################
+CHUNK_TOKENIZER_NAME = "xlm-roberta-base"
+CHUNK_SIZE_TOKENS = 800
+CHUNK_OVERLAP_TOKENS = 80
 
 ####################### Language #################
 PRIMARY_LANG = "en"

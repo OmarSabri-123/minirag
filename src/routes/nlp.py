@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from controllers import NLPController
 from models import ResponseEnumeration
 from models.ChunkModel import ChunkModel
-from models.ProjectModel import ProjectModel
+from models.DomainModel import ProjectModel
 from routes.schemes.nlp import PushRequest, SearchRequest
 from fastapi import APIRouter, Request
 
