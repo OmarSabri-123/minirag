@@ -10,9 +10,14 @@ class VLLMProvider(LLMInterface):
                  api_key: str = "EMPTY",
                  default_input_max_characters: int = 1000,
                  default_output_max_tokens: int = 1000,
-                 default_temperature: float = 0.1):
+                 default_temperature: float = 0.1,
+                 enable_thinking: bool = False):
 
         self.api_url = api_url
+        # qwen3 hybrid models emit <think>...</think> blocks by default, which
+        # would leak into the rag answer; the flag is ignored by templates
+        # that do not define it
+        self.enable_thinking = enable_thinking
         # vLLM ignores the key unless the server was started with --api-key,
         # but the OpenAI client refuses to build without a non-empty one
         self.api_key = api_key if api_key and len(api_key) else "EMPTY"
@@ -64,7 +69,10 @@ class VLLMProvider(LLMInterface):
                 model=self.generation_model_id,
                 messages=chat_history,
                 max_tokens=max_output_tokens,
-                temperature=temperature
+                temperature=temperature,
+                extra_body={
+                    "chat_template_kwargs": {"enable_thinking": self.enable_thinking}
+                }
             )
         except Exception as e:
             logger.error(f"Error while calling vLLM at {self.api_url}: {e}")
