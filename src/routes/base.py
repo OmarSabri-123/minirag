@@ -5,7 +5,7 @@ from logger import logger
 
 base_router = APIRouter(
     prefix="/api/v1",
-    tags=["multimodel-rag"],
+    tags=["Health-Check"],
 )
 
 @base_router.get("/health")

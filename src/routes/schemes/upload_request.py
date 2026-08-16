@@ -1,19 +1,22 @@
 from pydantic import BaseModel
 from typing import Optional
-from fastapi import Path, UploadFile, File
+from fastapi import File, Form, UploadFile
 
 class UploadRequest(BaseModel):
-    project_id: int
+    domain_name: str
+    sub_domain_name: Optional[str] = "default"
     file: UploadFile
 
     @classmethod
     def as_upload(
         cls,
-        project_id: int = Path(...),
+        domain_name: str = Form(...),
+        sub_domain_name: Optional[str] = Form("default"),
         file: UploadFile = File(...)
     ):
         return cls(
-            project_id=project_id,
+            domain_name=domain_name,
+            sub_domain_name=sub_domain_name,
             file=file
         )
     

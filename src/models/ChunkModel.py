@@ -1,5 +1,5 @@
 from .BaseDataModel import BaseDataModel
-from .db_schemes import DataChunk
+from .db_schemes import DataChunk, Document
 from sqlalchemy.future import select
 from sqlalchemy import func, delete
 from typing import List
@@ -36,26 +36,68 @@ class ChunkModel(BaseDataModel):
         return len(chunks)
     
     
-    async def delete_chunks_by_project_id(self, project_id: str):
+    async def delete_chunks_by_domain_id(self, domain_id: str):
+        # chunks belong to documents, so the domain is reached through them
         async with self.db_client() as session:
-            query = delete(DataChunk).where(DataChunk.chunk_project_id == project_id)
+            documents_query = select(Document.document_id).where(Document.domain_id == domain_id)
+            query = delete(DataChunk).where(DataChunk.document_id.in_(documents_query))
             result = await session.execute(query)
             await session.commit()
         return result.rowcount
-    
-    async def get_poject_chunks(self, project_id: str, page_no: int=1, page_size: int=50):
+
+    async def delete_chunks_by_document_id(self, document_id: str):
         async with self.db_client() as session:
-            query = select(DataChunk).where(DataChunk.chunk_project_id == project_id).offset((page_no - 1) * page_size).limit(page_size)
+            query = delete(DataChunk).where(DataChunk.document_id == document_id)
+            result = await session.execute(query)
+            await session.commit()
+        return result.rowcount
+
+    async def get_domain_chunks(self, domain_id: str, page_no: int=1, page_size: int=50):
+        async with self.db_client() as session:
+            query = select(DataChunk).join(Document).where(
+                Document.domain_id == domain_id
+            ).order_by(
+                DataChunk.document_id, DataChunk.chunk_index
+            ).offset((page_no - 1) * page_size).limit(page_size)
             result = await session.execute(query)
             records = result.scalars().all()
         return records
-    
-    async def get_total_chunks_count(self, project_id: str):
-        total_count = 0
+
+    async def get_total_chunks_count(self, domain_id: str):
         async with self.db_client() as session:
-            query = select(func.count(DataChunk.chunk_id)).where(DataChunk.chunk_project_id == project_id)
+            query = select(func.count(DataChunk.chunk_id)).join(Document).where(
+                Document.domain_id == domain_id
+            )
             records_count = await session.execute(query)
-            total_count = records_count.scalar()
-        
-        return total_count
+            return records_count.scalar()
+
+    async def get_filtered_chunks(self, domain_id: str, sub_domain_id: str = None,
+                                  document_id: str = None, page_no: int = 1,
+                                  page_size: int = 50):
+        """Return one page of chunks limited to a domain, subdomain, or file."""
+        conditions = [Document.domain_id == domain_id]
+        if sub_domain_id is not None:
+            conditions.append(Document.sub_domain_id == sub_domain_id)
+        if document_id is not None:
+            conditions.append(DataChunk.document_id == document_id)
+
+        async with self.db_client() as session:
+            query = select(DataChunk).join(Document).where(*conditions).order_by(
+                DataChunk.document_id, DataChunk.chunk_index
+            ).offset((page_no - 1) * page_size).limit(page_size)
+            result = await session.execute(query)
+            return result.scalars().all()
+
+    async def get_filtered_chunks_count(self, domain_id: str, sub_domain_id: str = None,
+                                        document_id: str = None):
+        conditions = [Document.domain_id == domain_id]
+        if sub_domain_id is not None:
+            conditions.append(Document.sub_domain_id == sub_domain_id)
+        if document_id is not None:
+            conditions.append(DataChunk.document_id == document_id)
+
+        async with self.db_client() as session:
+            query = select(func.count(DataChunk.chunk_id)).join(Document).where(*conditions)
+            result = await session.execute(query)
+            return result.scalar()
     

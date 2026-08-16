@@ -13,19 +13,18 @@ from sqlalchemy.orm import sessionmaker
 from sentence_transformers import CrossEncoder
 import torch
 
-app = FastAPI(title="Multi-Model RAG API")
+app = FastAPI(title="Multi Domain RAG API")
 
 setup_metrics(app)
 
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_methods=["*"],
-#     allow_credentials=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_credentials=["*"],
+    allow_headers=["*"],
+)
 
-# git rm -r --cached assets/database/
 async def startup_span():
 
     settings: Settings = get_settings()
@@ -63,12 +62,12 @@ async def startup_span():
         default_language=settings.DEFAULT_LANG
     )
 
-    app.cross_encoder = CrossEncoder(
-        settings.RERANK_CROSS_ENCODER_NAME,
-        model_kwargs={"dtype": dtype},
-        trust_remote_code=True,
-    )
-    app.cross_encoder.to(device)
+    # app.cross_encoder = CrossEncoder(
+    #     settings.RERANK_CROSS_ENCODER_NAME,
+    #     model_kwargs={"dtype": dtype},
+    #     trust_remote_code=True,
+    # )
+    # app.cross_encoder.to(device)
     
 async def shutdown_span():
     await app.db_engine.dispose()

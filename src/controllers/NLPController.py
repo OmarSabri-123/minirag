@@ -1,13 +1,14 @@
 from .BaseController import BaseController
 from stores.llm.LLMEnums import DocumentTypeEnum
-from models.db_schemes import Project, DataChunk
+from models.db_schemes import Domain, DataChunk
 from routes.schemes.QueryExpand import SemanticExpansion
 from typing import List
 import json
 
 class NLPController(BaseController):
 
-    def __init__(self, vector_db_client, cross_encoder, embedding_client, generation_client, template_parser):
+    def __init__(self, vector_db_client, embedding_client, generation_client, template_parser,
+                 cross_encoder=None):
         super().__init__()
         self.vector_db_client = vector_db_client
         self.cross_encoder = cross_encoder
@@ -15,20 +16,20 @@ class NLPController(BaseController):
         self.generation_client = generation_client
         self.template_parser = template_parser
 
-    def create_collection_name(self, project_id: str):
-        return f"collection_{project_id}".strip()
+    def create_collection_name(self, domain_id: str):
+        return f"collection_{domain_id}".strip()
     
-    def create_cache_name(self, project_id: str):
-        return f"cache_{project_id}".strip()
+    def create_cache_name(self, domain_id: str):
+        return f"cache_{domain_id}".strip()
 
-    async def reset_vector_db_collection(self, project: Project):
+    async def reset_vector_db_collection(self, domain: Domain):
         collection_name = self.create_collection_name(
-            project_id=project.project_id)
+            domain_id=domain.domain_id)
         return await self.vector_db_client.delete_collection(collection_name=collection_name)
 
-    async def get_vector_db_collection_info(self, project: Project):
+    async def get_vector_db_collection_info(self, domain: Domain):
         collection_name = self.create_collection_name(
-            project_id=project.project_id)
+            domain_id=domain.domain_id)
         collection_info = await self.vector_db_client.get_collection_info(
             collection_name=collection_name)
 
@@ -36,14 +37,14 @@ class NLPController(BaseController):
             json.dumps(collection_info, default=lambda x: x.__dict__)
         )
 
-    async def index_into_vector_db(self, project: Project, chunks: List[DataChunk],
+    async def index_into_vector_db(self, domain: Domain, chunks: List[DataChunk],
                              chunks_ids: List[int],
                              do_reset: bool = False):
 
         collection_name = self.create_collection_name(
-            project_id=project.project_id)
+            domain_id=domain.domain_id)
 
-        texts = [c.chunk_text for c in chunks]
+        texts = [c.content for c in chunks]
         metadata = [c.chunk_metadata for c in chunks]
         vectors = await self.embedding_client.embed_text(
             texts, DocumentTypeEnum.DOCUMENT.value)
@@ -106,10 +107,10 @@ class NLPController(BaseController):
         
         return query_vector
     
-    async def retrieve_answer_from_cache(self, project: Project, query_vector: list, cache_threshold=0.7):
+    async def retrieve_answer_from_cache(self, domain: Domain, query_vector: list, cache_threshold=0.7):
 
         cache_name = self.create_cache_name(
-            project_id=project.project_id
+            domain_id=domain.domain_id
         )
 
         cache_result = await self.vector_db_client.search_cache(
@@ -121,10 +122,10 @@ class NLPController(BaseController):
                 if s.score <= cache_threshold:
                     return s.payload["response_text"]
     
-    async def add_answer_into_cache(self, project: Project, query_vector: list, answer: str):
+    async def add_answer_into_cache(self, domain: Domain, query_vector: list, answer: str):
 
         cache_name = self.create_cache_name(
-            project_id=project.project_id
+            domain_id=domain.domain_id
         )
 
         _ = await self.vector_db_client.add_to_cache(
@@ -135,6 +136,10 @@ class NLPController(BaseController):
         return True
     
     async def rerank_documents(self, expanded_query: str, documents: list):
+
+        # the cross encoder is optional, without it the vector search order is kept
+        if self.cross_encoder is None:
+            return [{"text": document, "score": None} for document in documents[:3]]
 
         rankings = self.cross_encoder.rank(
             expanded_query,
@@ -151,7 +156,7 @@ class NLPController(BaseController):
         ]
         return result
 
-    async def search_vector_db_collection(self, project: Project, query: str, limit: int = 5):
+    async def search_vector_db_collection(self, domain: Domain, query: str, limit: int = 5):
 
         query_optimization = await self.query_expansion(
             query=query
@@ -165,8 +170,8 @@ class NLPController(BaseController):
         )
         
         collection_name = self.create_collection_name(
-            project_id=project.project_id)
-        
+            domain_id=domain.domain_id)
+
         result = await self.vector_db_client.search_by_vector(
             collection_name=collection_name,
             text=query_optimization.expanded_query,
@@ -186,12 +191,12 @@ class NLPController(BaseController):
 
         return result_rerank
     
-    async def rag_answer_question(self, project: Project, query:str, limit: int = 5):
+    async def rag_answer_question(self, domain: Domain, query:str, limit: int = 5):
 
         answer, full_prompt, chat_history = None, None, None
 
         retrieved_documents = await self.search_vector_db_collection(
-            project=project,
+            domain=domain,
             query=query,
             limit=limit
         )

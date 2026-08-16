@@ -1,5 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+from pathlib import Path
+
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 class Settings(BaseSettings):
 
@@ -50,15 +53,11 @@ class Settings(BaseSettings):
     PRIMARY_LANG: Optional[str] = None
     DEFAULT_LANG: str
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        extra="ignore",
+    )
 
 
 def get_settings():
     return Settings()
-
-# config = get_settings()
-
-# print(config.GEMINI_API_KEY)
-# print('\n')
-# print(config.OPENAI_API_KEY)

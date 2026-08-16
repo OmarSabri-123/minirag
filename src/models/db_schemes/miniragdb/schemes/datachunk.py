@@ -43,11 +43,6 @@ class DataChunk(SQLAlchemyBase):
         nullable=False
     )
 
-    title = Column(
-        String(500),
-        nullable=True
-    )
-
     content = Column(
         Text,
         nullable=False
@@ -56,12 +51,6 @@ class DataChunk(SQLAlchemyBase):
     token_count = Column(
         Integer,
         nullable=True
-    )
-
-    language = Column(
-        String(20),
-        default="ar-en",
-        nullable=False
     )
 
     chunk_metadata = Column(

@@ -4,27 +4,33 @@ from fastapi.responses import JSONResponse
 from controllers import NLPController
 from models import ResponseEnumeration
 from models.ChunkModel import ChunkModel
-from models.DomainModel import ProjectModel
+from models.DomainModel import DomainModel
+from models.DocumentModel import DocumentModel
+from models.SubDomainModel import SubDomainModel
 from routes.schemes.nlp import PushRequest, SearchRequest
 from fastapi import APIRouter, Request
 
 nlp_router = APIRouter(
     prefix="/api/v1",
-    tags=["multimodel-rag"]
+    tags=["Search-RAG"],
 )
 
-@nlp_router.post("/index/push/{project_id}")
-async def index_project(request: Request, project_id: int, push_request: PushRequest):
+@nlp_router.post("/index/push")
+async def index_project(request: Request, push_request: PushRequest):
 
-    project_model = await ProjectModel.create_instance(
+    domain_model = await DomainModel.create_instance(
         db_client=request.app.db_client
     )
     chunk_model = await ChunkModel.create_instance(
         db_client=request.app.db_client
     )
-    project = await project_model.get_project_or_create_one(project_id=project_id)
+    document_model = await DocumentModel.create_instance(
+        db_client=request.app.db_client
+    )
+    domain = await domain_model.get_domain_by_name(
+        domain_name=push_request.domain_name)
 
-    if not project:
+    if not domain:
         return JSONResponse(
             status_code=400,
             content={
@@ -32,12 +38,38 @@ async def index_project(request: Request, project_id: int, push_request: PushReq
             }
         )
 
+    sub_domain_model = await SubDomainModel.create_instance(
+        db_client=request.app.db_client
+    )
+    sub_domain = await sub_domain_model.get_sub_domain_by_name(
+        domain_id=domain.domain_id,
+        sub_domain_name=push_request.sub_domain_name,
+    )
+    if not sub_domain:
+        return JSONResponse(
+            status_code=400,
+            content={"signal": ResponseEnumeration.PROJECT_NOT_FOUND_ERROR.value},
+        )
+
+    document = None
+    if push_request.file_id is not None:
+        document = await document_model.get_document_by_id(
+            document_id=push_request.file_id,
+            domain_id=domain.domain_id,
+            sub_domain_id=sub_domain.sub_domain_id,
+        )
+        if not document:
+            return JSONResponse(
+                status_code=400,
+                content={"signal": ResponseEnumeration.FILE_ID_ERROR.value},
+            )
+
     nlp_controller = NLPController(
         vector_db_client=request.app.vectordb_client,
-        cross_encoder=request.app.cross_encoder,
         embedding_client=request.app.embedding_client,
         generation_client=request.app.generation_client,
-        template_parser=request.app.template_parser
+        template_parser=request.app.template_parser,
+        cross_encoder=getattr(request.app, "cross_encoder", None)
     )
 
     has_records = True
@@ -46,11 +78,11 @@ async def index_project(request: Request, project_id: int, push_request: PushReq
     idx = 0
 
     collection_name = nlp_controller.create_collection_name(
-        project_id=project.project_id)
-    
-    cache_name = nlp_controller.create_cache_name(
-        project_id=project.project_id
-    )
+        domain_id=domain.domain_id)
+
+    # cache_name = nlp_controller.create_cache_name(
+    #     domain_id=domain.domain_id
+    # )
 
     _ = await request.app.vectordb_client.create_collection(
         collection_name=collection_name,
@@ -58,31 +90,37 @@ async def index_project(request: Request, project_id: int, push_request: PushReq
         do_reset=push_request.do_reset
     )
     
-    _ = await request.app.vectordb_client.create_cache_collection(
-        cache_name=cache_name,
-        embedding_size=request.app.embedding_client.embedding_size,
-        do_reset=push_request.do_reset
-    )
+    # _ = await request.app.vectordb_client.create_cache_collection(
+    #     cache_name=cache_name,
+    #     embedding_size=request.app.embedding_client.embedding_size,
+    #     do_reset=push_request.do_reset
+    # )
 
-    total_chunks_count = await chunk_model.get_total_chunks_count(
-        project_id=project.project_id
+    total_chunks_count = await chunk_model.get_filtered_chunks_count(
+        domain_id=domain.domain_id,
+        sub_domain_id=sub_domain.sub_domain_id,
+        document_id=document.document_id if document else None,
     )
     pbar = tqdm(total=total_chunks_count, desc="Vector Indexing", position=0)
 
     while has_records:
-        page_chunks = await chunk_model.get_poject_chunks(project_id=project.project_id, page_no=page_no)
-        if len(page_chunks):
-            page_no += 1
+        page_chunks = await chunk_model.get_filtered_chunks(
+            domain_id=domain.domain_id,
+            sub_domain_id=sub_domain.sub_domain_id,
+            document_id=document.document_id if document else None,
+            page_no=page_no,
+        )
 
         if not page_chunks or len(page_chunks) == 0:
             has_records = False
             break
 
         chunks_ids = [c.chunk_id for c in page_chunks]
+        page_no += 1
         idx += len(page_chunks)
 
         is_inserted = await nlp_controller.index_into_vector_db(
-            project=project,
+            domain=domain,
             chunks=page_chunks,
             chunks_ids=chunks_ids
         )
@@ -105,25 +143,25 @@ async def index_project(request: Request, project_id: int, push_request: PushReq
         }
     )
 
-@nlp_router.get("/index/info/{project_id}")
-async def get_project_index_info(request: Request, project_id: int):
+@nlp_router.get("/index/info/{domain_name}")
+async def get_project_index_info(request: Request, domain_name: str):
 
-    project_model = await ProjectModel.create_instance(
+    domain_model = await DomainModel.create_instance(
         db_client=request.app.db_client
     )
 
-    project = await project_model.get_project_or_create_one(project_id=project_id)
+    domain = await domain_model.get_domain_by_name(domain_name=domain_name)
 
     nlp_controller = NLPController(
         vector_db_client=request.app.vectordb_client,
-        cross_encoder=request.app.cross_encoder,
         embedding_client=request.app.embedding_client,
         generation_client=request.app.generation_client,
-        template_parser=request.app.template_parser
+        template_parser=request.app.template_parser,
+        cross_encoder=getattr(request.app, "cross_encoder", None)
     )
 
     collection_info = await nlp_controller.get_vector_db_collection_info(
-        project=project)
+        domain=domain)
 
     return JSONResponse(
         status_code=200,
@@ -134,25 +172,25 @@ async def get_project_index_info(request: Request, project_id: int):
     )
 
 
-@nlp_router.post("/index/search/{project_id}")
-async def search_index(request: Request, project_id: int, search_request: SearchRequest):
+@nlp_router.post("/index/search/")
+async def search_index(request: Request, search_request: SearchRequest):
 
-    project_model = await ProjectModel.create_instance(
+    domain_model = await DomainModel.create_instance(
         db_client=request.app.db_client
     )
 
-    project = await project_model.get_project_or_create_one(project_id=project_id)
+    domain = await domain_model.get_domain_by_name(domain_name=search_request.domain_name)
 
     nlp_controller = NLPController(
         vector_db_client=request.app.vectordb_client,
-        cross_encoder=request.app.cross_encoder,
         embedding_client=request.app.embedding_client,
         generation_client=request.app.generation_client,
-        template_parser=request.app.template_parser
+        template_parser=request.app.template_parser,
+        cross_encoder=getattr(request.app, "cross_encoder", None)
     )
 
     results = await nlp_controller.search_vector_db_collection(
-        project=project,
+        domain=domain,
         query=search_request.text,
         limit=search_request.limit
     )
@@ -173,21 +211,21 @@ async def search_index(request: Request, project_id: int, search_request: Search
         }
     )
 
-@nlp_router.post("/index/answer/{project_id}")
-async def answer_rag(request: Request, project_id: int, search_request: SearchRequest):
+@nlp_router.post("/index/answer/{domain_name}")
+async def answer_rag(request: Request, domain_name: str, search_request: SearchRequest):
 
-    project_model = await ProjectModel.create_instance(
+    domain_model = await DomainModel.create_instance(
         db_client=request.app.db_client
     )
 
-    project = await project_model.get_project_or_create_one(project_id=project_id)
+    domain = await domain_model.get_domain_by_name(domain_name=domain_name)
 
     nlp_controller = NLPController(
         vector_db_client=request.app.vectordb_client,
-        cross_encoder=request.app.cross_encoder,
         embedding_client=request.app.embedding_client,
         generation_client=request.app.generation_client,
-        template_parser=request.app.template_parser
+        template_parser=request.app.template_parser,
+        cross_encoder=getattr(request.app, "cross_encoder", None)
     )
 
     query_vector = await nlp_controller.query_embeddings(
@@ -196,7 +234,7 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
 
     # Retrieve answer from cache if exists
     cache_answer = await nlp_controller.retrieve_answer_from_cache(
-        project=project,
+        domain=domain,
         query_vector=query_vector
     )
 
@@ -210,7 +248,7 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
         )
 
     answer, full_prompt, chat_history = await nlp_controller.rag_answer_question(
-        project=project,
+        domain=domain,
         query=search_request.text,
         limit=search_request.limit
     )
@@ -224,7 +262,7 @@ async def answer_rag(request: Request, project_id: int, search_request: SearchRe
         )
     
     _ = await nlp_controller.add_answer_into_cache(
-        project=project,
+        domain=domain,
         query_vector=query_vector,
         answer=answer
     )

@@ -28,6 +28,7 @@ class Domain(SQLAlchemyBase):
     name = Column(
         String(200),
         unique=True,
+        index=True,
         nullable=False
     )
 

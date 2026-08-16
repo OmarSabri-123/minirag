@@ -17,21 +17,27 @@ class DomainModel(BaseDataModel):
             await session.refresh(domain)
         return domain
     
-    async def get_domain_or_create_one(self, domain_id: str):
+    async def get_domain_by_name(self, domain_name: str):
 
         async with self.db_client() as session:
             async with session.begin():
-                query = select(Domain).where(Domain.domain_id == domain_id)
+                query = select(Domain).where(Domain.name == domain_name)
                 result = await session.execute(query)
-                domain = result.scalar_one_or_none()
-                if domain is None:
-                    domain_rec = Domain(
-                        domain_id = domain_id
-                    )
-                    domain = await self.create_domain(domain=domain_rec)
-                    return domain
-                else:
-                    return domain
+                return result.scalar_one_or_none()
+            
+    
+    async def get_domain_or_create_one(self, domain_name: str, description: str=None):
+
+        domain = await self.get_domain_by_name(domain_name=domain_name)
+        if domain is not None:
+            return domain
+
+        domain_rec = Domain(
+            name=domain_name,
+            description=description
+        )
+
+        return await self.create_domain(domain=domain_rec)
     
     async def get_all_domains(self, page: int=1, page_size: int=10):
 

@@ -195,7 +195,9 @@ class QdrantDBProvider(VectorDBInterface):
 
             batch_points = [
                 models.PointStruct(
-                    id=batch_ids[x],
+                    # SQLAlchemy returns PostgreSQL UUID values as uuid.UUID
+                    # objects, while Qdrant point IDs must be an int or string.
+                    id=str(batch_ids[x]),
                     vector={
                         QdrantVectorType.DENSE.value: batch_vectors[x],
                         QdrantVectorType.SPARSE.value: models.Document(
